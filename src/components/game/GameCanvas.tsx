@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, StyleSheet, View, Text } from 'react-native';
 
 import {
   BOMB_COUNTDOWN, BOMB_SPAWN, PLAYER_SIZE, PLAYER_SPAWN,
@@ -10,7 +10,7 @@ import type { GameState } from '../../game/types';
 import { MAP_TILES, MAP_DECORATIONS } from '../../game/mapData';
 import PlayerSprite from './PlayerSprite';
 import {
-  GrassFloor, AllTiles, AllDecorations, BombWorldSprite,
+  GrassFloor, AllTiles, AllDecorations,
 } from './MapTileRenderer';
 
 export interface JoystickRef { x: number; y: number }
@@ -141,9 +141,11 @@ export default function GameCanvas({
         {/* Collision tiles */}
         <AllTiles tiles={MAP_TILES} />
 
-        {/* Bomb pickup */}
+        {/* Bomb pickup — pure View/Text, safe inside Animated.View */}
         <Animated.View style={[styles.bombWrap, { left: bombLeft, top: bombTop, opacity: bombOpacity }]}>
-          <BombWorldSprite size={32} />
+          <View style={styles.bombBody}>
+            <Text style={styles.bombEmoji}>💣</Text>
+          </View>
         </Animated.View>
 
         {/* Explosion ring */}
@@ -225,9 +227,16 @@ const styles = StyleSheet.create({
   },
   bombWrap: {
     position: 'absolute',
-    width: 32, height: 32,
+    width: 40, height: 40,
     alignItems: 'center', justifyContent: 'center',
   },
+  bombBody: {
+    width: 36, height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  bombEmoji: { fontSize: 26 },
   explosion: {
     position: 'absolute',
     width: 160, height: 160,

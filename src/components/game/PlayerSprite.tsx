@@ -1,11 +1,5 @@
 import React from 'react';
-import Svg, {
-  Circle,
-  Ellipse,
-  G,
-  Path,
-  Rect,
-} from 'react-native-svg';
+import { View, Text, StyleSheet } from 'react-native';
 
 import type { AnimationState, FacingDirection } from '../../game/types';
 
@@ -17,23 +11,7 @@ interface PlayerSpriteProps {
   hasBomb: boolean;
 }
 
-// ── Frame calculation ──────────────────────────────────────────────────────────
-function getAnimFrame(
-  animState: AnimationState,
-  animClock: number,
-  idleDur: number,
-  runDur: number,
-  idleFrames: number,
-  runFrames: number,
-): number {
-  if (animState === 'idle') {
-    return Math.floor(animClock / idleDur) % idleFrames;
-  }
-  return Math.floor(animClock / runDur) % runFrames;
-}
-
-// ── Chibi character SVG ────────────────────────────────────────────────────────
-// Drawn in a 48×56 coordinate space, centred on (24, 28)
+// Pure View/Text player — guaranteed to render inside Animated.View on all platforms
 export default function PlayerSprite({
   size,
   facing,
@@ -41,246 +19,144 @@ export default function PlayerSprite({
   animClock,
   hasBomb,
 }: PlayerSpriteProps) {
-  const scale = size / 48;
-  const svgW = 48;
-  const svgH = 64;
+  // 4-frame run cycle, 2-frame idle bob
+  const runFrame  = Math.floor(animClock / 110) % 4;
+  const idleFrame = Math.floor(animClock / 500) % 2;
 
-  // Animation frame
-  const frame = getAnimFrame(animState, animClock, 500, 110, 2, 4);
-
-  // Body bob: idle frames bob slightly, run frames are stable
-  const bodyBob = animState === 'idle' ? (frame === 0 ? 0 : 1) : 0;
-
-  // Leg offsets for run animation
-  const legOffsets: [number, number][] =
-    animState === 'running'
-      ? [[0, -6], [0, 0], [0, 6], [0, 0]] // left-swing, neutral, right-swing, neutral (using Y to simulate)
-      : [[0, 0], [0, 0], [0, 0], [0, 0]];
-
-  const [legDx] = legOffsets[frame] ?? [0, 0];
-
-  const flipX = facing === 'left' ? -1 : 1;
-
-  // Run: alternate leg X positions
-  const leftLegX  = animState === 'running' ? 16 + (frame % 2 === 0 ? -5 : 3) : 16;
-  const rightLegX = animState === 'running' ? 29 + (frame % 2 === 0 ? 3 : -5) : 29;
-  const leftShoeX  = leftLegX  - 3;
-  const rightShoeX = rightLegX - 3;
-
+  // Leg anim: alternate legs left/right for run
+  const leftLegUp  = animState === 'running' && runFrame % 2 === 0;
+  const rightLegUp = animState === 'running' && runFrame % 2 === 1;
+  // Body bob for idle
+  const bodyBob    = animState === 'idle' && idleFrame === 1 ? 1 : 0;
   // Arm swing
-  const armSwing = animState === 'running' ? (frame % 2 === 0 ? 4 : -4) : 0;
+  const leftArmSwing  = animState === 'running' ? (runFrame % 2 === 0 ? -8 : 8) : 0;
+  const rightArmSwing = animState === 'running' ? (runFrame % 2 === 0 ? 8 : -8) : 0;
+
+  const s = size / 48; // scale factor
 
   return (
-    <Svg
-      width={svgW * scale}
-      height={svgH * scale}
-      viewBox={`0 0 ${svgW} ${svgH}`}
-    >
-      <G transform={`scale(${flipX},1) translate(${flipX === -1 ? -svgW : 0},0)`}>
+    <View style={[styles.root, { width: size, height: size * 1.5 }]}>
+      {/* Bomb carried above head */}
+      {hasBomb && (
+        <View style={[styles.carryBomb, { bottom: size * 1.2 + 2 }]}>
+          <Text style={{ fontSize: 16 * s }}>💣</Text>
+        </View>
+      )}
 
-        {/* ── Shadow ── */}
-        <Ellipse cx={24} cy={60} rx={14} ry={4} fill="rgba(0,0,0,0.2)" />
+      {/* Shadow */}
+      <View style={[styles.shadow, {
+        width: size * 0.75,
+        height: size * 0.18,
+        borderRadius: size * 0.1,
+        bottom: 0,
+        left: size * 0.125,
+      }]} />
 
-        {/* ── Legs ── */}
-        <Rect
-          x={leftLegX}
-          y={46 + bodyBob}
-          width={7}
-          height={10}
-          rx={3}
-          fill="#3d5a99"
-        />
-        <Rect
-          x={rightLegX}
-          y={46 + bodyBob}
-          width={7}
-          height={10}
-          rx={3}
-          fill="#3d5a99"
-        />
+      {/* Left arm */}
+      <View style={[styles.arm, {
+        width: 7 * s, height: 18 * s, borderRadius: 4 * s,
+        left: -4 * s, top: 28 * s + bodyBob,
+        transform: [{ rotate: `${leftArmSwing}deg` }],
+        backgroundColor: '#4a90e2',
+      }]} />
 
-        {/* ── Shoes ── */}
-        <Ellipse
-          cx={leftShoeX + 5}
-          cy={57 + bodyBob}
-          rx={6}
-          ry={4}
-          fill="#cc3333"
-        />
-        <Ellipse
-          cx={rightShoeX + 5}
-          cy={57 + bodyBob}
-          rx={6}
-          ry={4}
-          fill="#cc3333"
-        />
-        {/* Shoe shine */}
-        <Ellipse
-          cx={leftShoeX + 4}
-          cy={55 + bodyBob}
-          rx={3}
-          ry={2}
-          fill="rgba(255,255,255,0.35)"
-        />
-        <Ellipse
-          cx={rightShoeX + 4}
-          cy={55 + bodyBob}
-          rx={3}
-          ry={2}
-          fill="rgba(255,255,255,0.35)"
-        />
+      {/* Right arm */}
+      <View style={[styles.arm, {
+        width: 7 * s, height: 18 * s, borderRadius: 4 * s,
+        right: -4 * s, top: 28 * s + bodyBob,
+        transform: [{ rotate: `${rightArmSwing}deg` }],
+        backgroundColor: '#4a90e2',
+      }]} />
 
-        {/* ── Body ── */}
-        <Rect
-          x={10}
-          y={30 + bodyBob}
-          width={28}
-          height={18}
-          rx={6}
-          fill="#4a90e2"
-        />
-        {/* Body highlight */}
-        <Rect
-          x={13}
-          y={31 + bodyBob}
-          width={10}
-          height={6}
-          rx={3}
-          fill="rgba(255,255,255,0.28)"
-        />
+      {/* Body */}
+      <View style={[styles.body, {
+        width: 28 * s, height: 18 * s,
+        borderRadius: 6 * s,
+        left: 10 * s, top: 28 * s + bodyBob,
+      }]}>
         {/* Belt */}
-        <Rect
-          x={10}
-          y={43 + bodyBob}
-          width={28}
-          height={4}
-          rx={2}
-          fill="#2c5f9e"
-        />
-        {/* Belt buckle */}
-        <Rect
-          x={21}
-          y={43 + bodyBob}
-          width={6}
-          height={4}
-          rx={1}
-          fill="#f5c518"
-        />
+        <View style={[styles.belt, { height: 4 * s, bottom: 0, borderRadius: 2 * s }]}>
+          <View style={[styles.buckle, { width: 6 * s, height: 4 * s, borderRadius: 1 * s }]} />
+        </View>
+        {/* Body shine */}
+        <View style={[styles.bodyShine, { width: 10 * s, height: 5 * s, borderRadius: 3 * s, top: 2 * s, left: 3 * s }]} />
+      </View>
 
-        {/* ── Arms ── */}
-        {/* Left arm */}
-        <G transform={`rotate(${-armSwing}, 10, 35)`}>
-          <Rect
-            x={3}
-            y={30 + bodyBob}
-            width={8}
-            height={14}
-            rx={4}
-            fill="#4a90e2"
-          />
-          {/* Left hand */}
-          <Circle cx={7} cy={45 + bodyBob} r={4} fill="#ffcba4" />
-        </G>
-        {/* Right arm */}
-        <G transform={`rotate(${armSwing}, 38, 35)`}>
-          <Rect
-            x={37}
-            y={30 + bodyBob}
-            width={8}
-            height={14}
-            rx={4}
-            fill="#4a90e2"
-          />
-          {/* Right hand */}
-          <Circle cx={41} cy={45 + bodyBob} r={4} fill="#ffcba4" />
-        </G>
+      {/* Head */}
+      <View style={[styles.head, {
+        width: 30 * s, height: 30 * s,
+        borderRadius: 15 * s,
+        left: 9 * s, top: 0,
+      }]}>
+        {/* Hair (yellow top) */}
+        <View style={[styles.hair, { width: 30 * s, height: 16 * s, borderRadius: 15 * s, top: -2 * s }]} />
+        {/* Cheeks */}
+        <View style={[styles.cheekL, { width: 8 * s, height: 5 * s, borderRadius: 4 * s, bottom: 8 * s, left: 1 * s }]} />
+        <View style={[styles.cheekR, { width: 8 * s, height: 5 * s, borderRadius: 4 * s, bottom: 8 * s, right: 1 * s }]} />
+        {/* Eyes — flip based on facing */}
+        <View style={[styles.eyeRow, { top: 12 * s, flexDirection: facing === 'left' ? 'row-reverse' : 'row' }]}>
+          <View style={[styles.eyeWhite, { width: 9 * s, height: 10 * s, borderRadius: 5 * s }]}>
+            <View style={[styles.pupil, { width: 5 * s, height: 6 * s, borderRadius: 3 * s }]}>
+              <View style={[styles.shine, { width: 2 * s, height: 2 * s, borderRadius: s }]} />
+            </View>
+          </View>
+          <View style={{ width: 4 * s }} />
+          <View style={[styles.eyeWhite, { width: 9 * s, height: 10 * s, borderRadius: 5 * s }]}>
+            <View style={[styles.pupil, { width: 5 * s, height: 6 * s, borderRadius: 3 * s }]}>
+              <View style={[styles.shine, { width: 2 * s, height: 2 * s, borderRadius: s }]} />
+            </View>
+          </View>
+        </View>
+        {/* Mouth */}
+        <View style={[styles.mouth, {
+          width: animState === 'running' ? 10 * s : 8 * s,
+          height: 3 * s, borderRadius: 2 * s,
+          bottom: 5 * s, left: 10 * s,
+        }]} />
+      </View>
 
-        {/* ── Neck ── */}
-        <Rect
-          x={20}
-          y={26 + bodyBob}
-          width={8}
-          height={6}
-          rx={2}
-          fill="#ffcba4"
-        />
-
-        {/* ── Head ── */}
-        <Circle cx={24} cy={18} r={16} fill="#ffcba4" />
-        {/* Head shadow underside */}
-        <Path
-          d="M 10 20 Q 24 34 38 20"
-          fill="rgba(200,120,80,0.18)"
-          stroke="none"
-        />
-
-        {/* ── Hair ── */}
-        {/* Main hair */}
-        <Ellipse cx={24} cy={8} rx={14} ry={8} fill="#f5c518" />
-        {/* Hair bangs */}
-        <Ellipse cx={14} cy={10} rx={7} ry={6} fill="#f5c518" />
-        <Ellipse cx={34} cy={10} rx={7} ry={6} fill="#f5c518" />
-        {/* Top spiky bits */}
-        <Circle cx={20} cy={4} r={5} fill="#f5c518" />
-        <Circle cx={28} cy={3} r={5} fill="#f5c518" />
-        {/* Hair highlight */}
-        <Ellipse cx={20} cy={7} rx={4} ry={3} fill="rgba(255,255,200,0.4)" />
-
-        {/* ── Eyes ── */}
-        {/* Eye whites */}
-        <Ellipse cx={17} cy={18} rx={5} ry={5.5} fill="white" />
-        <Ellipse cx={31} cy={18} rx={5} ry={5.5} fill="white" />
-        {/* Iris */}
-        <Circle cx={17} cy={19} r={3.5} fill="#3d85c8" />
-        <Circle cx={31} cy={19} r={3.5} fill="#3d85c8" />
-        {/* Pupil */}
-        <Circle cx={17.5} cy={19} r={2} fill="#1a1a2a" />
-        <Circle cx={31.5} cy={19} r={2} fill="#1a1a2a" />
-        {/* Eye shine */}
-        <Circle cx={18.5} cy={17.5} r={1} fill="white" />
-        <Circle cx={32.5} cy={17.5} r={1} fill="white" />
-        {/* Eyelashes / brow */}
-        <Path d="M 13 13 Q 17 11 21 13" stroke="#8B6914" strokeWidth={1.2} fill="none" />
-        <Path d="M 27 13 Q 31 11 35 13" stroke="#8B6914" strokeWidth={1.2} fill="none" />
-
-        {/* ── Mouth ── */}
-        {animState === 'running'
-          ? <Path d="M 20 25 Q 24 28 28 25" stroke="#cc5533" strokeWidth={1.5} fill="none" />
-          : <Path d="M 20 25 Q 24 27 28 25" stroke="#cc5533" strokeWidth={1.5} fill="none" />
-        }
-
-        {/* ── Cheeks ── */}
-        <Ellipse cx={12} cy={21} rx={4} ry={2.5} fill="rgba(255,130,100,0.35)" />
-        <Ellipse cx={36} cy={21} rx={4} ry={2.5} fill="rgba(255,130,100,0.35)" />
-
-        {/* ── Ear ── */}
-        <Circle cx={8}  cy={19} r={4} fill="#ffcba4" />
-        <Circle cx={40} cy={19} r={4} fill="#ffcba4" />
-        <Circle cx={8}  cy={19} r={2} fill="#f0a080" />
-        <Circle cx={40} cy={19} r={2} fill="#f0a080" />
-
-        {/* ── Bomb held above head ── */}
-        {hasBomb && (
-          <G>
-            {/* Bomb body */}
-            <Circle cx={24} cy={-6} r={9} fill="#222" />
-            {/* Bomb shine */}
-            <Circle cx={21} cy={-9} r={3} fill="rgba(255,255,255,0.25)" />
-            {/* Fuse */}
-            <Path
-              d="M 24 -15 Q 28 -20 32 -17"
-              stroke="#8B6914"
-              strokeWidth={2}
-              fill="none"
-              strokeLinecap="round"
-            />
-            {/* Fuse spark */}
-            <Circle cx={32} cy={-17} r={3} fill="#FF6B00" />
-            <Circle cx={32} cy={-17} r={1.5} fill="#FFD700" />
-          </G>
-        )}
-
-      </G>
-    </Svg>
+      {/* Legs */}
+      <View style={[styles.legRow, { top: 46 * s + bodyBob, left: 12 * s, gap: 4 * s }]}>
+        <View style={[styles.leg, {
+          width: 9 * s, height: leftLegUp ? 7 * s : 10 * s,
+          borderRadius: 4 * s,
+          marginTop: leftLegUp ? 3 * s : 0,
+        }]}>
+          {/* Shoe */}
+          <View style={[styles.shoe, { width: 11 * s, height: 7 * s, borderRadius: 4 * s, left: -1 * s, bottom: -3 * s }]} />
+        </View>
+        <View style={[styles.leg, {
+          width: 9 * s, height: rightLegUp ? 7 * s : 10 * s,
+          borderRadius: 4 * s,
+          marginTop: rightLegUp ? 3 * s : 0,
+        }]}>
+          {/* Shoe */}
+          <View style={[styles.shoe, { width: 11 * s, height: 7 * s, borderRadius: 4 * s, left: -1 * s, bottom: -3 * s }]} />
+        </View>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { position: 'relative', alignItems: 'center' },
+  shadow: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.2)' },
+  carryBomb: { position: 'absolute', alignSelf: 'center' },
+  arm: { position: 'absolute' },
+  body: { position: 'absolute', backgroundColor: '#4a90e2', overflow: 'hidden' },
+  bodyShine: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.25)' },
+  belt: { position: 'absolute', width: '100%', backgroundColor: '#2c5f9e', alignItems: 'center', justifyContent: 'center' },
+  buckle: { backgroundColor: '#f5c518' },
+  head: { position: 'absolute', backgroundColor: '#ffcba4', overflow: 'hidden' },
+  hair: { position: 'absolute', backgroundColor: '#f5c518' },
+  cheekL: { position: 'absolute', backgroundColor: 'rgba(255,120,100,0.4)' },
+  cheekR: { position: 'absolute', backgroundColor: 'rgba(255,120,100,0.4)' },
+  eyeRow: { position: 'absolute', flexDirection: 'row', paddingHorizontal: 2 },
+  eyeWhite: { backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  pupil: { backgroundColor: '#1a1a2e', alignItems: 'flex-end', justifyContent: 'flex-start', paddingTop: 1, paddingRight: 1 },
+  shine: { backgroundColor: 'white' },
+  mouth: { position: 'absolute', backgroundColor: '#cc5533' },
+  legRow: { position: 'absolute', flexDirection: 'row', alignItems: 'flex-start' },
+  leg: { backgroundColor: '#3d5a99' },
+  shoe: { position: 'absolute', backgroundColor: '#cc3333' },
+});
