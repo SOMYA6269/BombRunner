@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bomb Runner",
     "slug": "bomb-runner",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

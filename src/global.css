@@ -4,46 +4,56 @@
 
 @layer base {
   :root {
-    --background: 222 47% 11%;
+    /* AAA Game Design System – Bomb Runner */
+    --background: 220 55% 7%;        /* Deep void: #080E1C */
     --foreground: 0 0% 98%;
-    --card: 222 47% 15%;
+    --card: 222 52% 12%;             /* Panel: #0F1E3A */
     --card-foreground: 0 0% 98%;
-    --popover: 222 47% 13%;
+    --card-bright: 222 52% 17%;      /* Elevated: #162947 */
+    --popover: 222 52% 10%;
     --popover-foreground: 0 0% 98%;
-    --primary: 43 100% 50%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 91% 55%;
+    --primary: 43 100% 50%;          /* Gold: #FFB800 */
+    --primary-foreground: 220 55% 7%;
+    --primary-dark: 43 100% 40%;     /* Gold dark: #CC9200 */
+    --secondary: 217 91% 55%;        /* Blue: #3B82F6 */
     --secondary-foreground: 0 0% 98%;
-    --muted: 222 47% 20%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 142 71% 45%;
+    --muted: 222 40% 18%;
+    --muted-foreground: 215 25% 58%;
+    --accent: 142 71% 45%;           /* Green: #22C55E */
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 57%;        /* Red: #EF4444 */
     --destructive-foreground: 0 0% 98%;
-    --border: 222 47% 25%;
-    --input: 222 47% 20%;
+    --border: 222 45% 22%;
+    --input: 222 45% 18%;
     --ring: 43 100% 50%;
-    --radius: 0.75rem;
+    --radius: 1rem;
+    /* Game-specific tokens */
+    --gold-glow: rgba(255,184,0,0.35);
+    --blue-glow: rgba(59,130,246,0.35);
+    --green-glow: rgba(34,197,94,0.35);
+    --red-glow: rgba(239,68,68,0.35);
+    --card-border: rgba(255,255,255,0.09);
+    --card-inner: rgba(255,255,255,0.04);
   }
   .dark {
-    --background: 222 47% 11%;
+    --background: 220 55% 7%;
     --foreground: 0 0% 98%;
-    --card: 222 47% 15%;
+    --card: 222 52% 12%;
     --card-foreground: 0 0% 98%;
-    --popover: 222 47% 13%;
+    --popover: 222 52% 10%;
     --popover-foreground: 0 0% 98%;
     --primary: 43 100% 50%;
-    --primary-foreground: 222 47% 11%;
+    --primary-foreground: 220 55% 7%;
     --secondary: 217 91% 55%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 222 47% 20%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 222 40% 18%;
+    --muted-foreground: 215 25% 58%;
     --accent: 142 71% 45%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 57%;
     --destructive-foreground: 0 0% 98%;
-    --border: 222 47% 25%;
-    --input: 222 47% 20%;
+    --border: 222 45% 22%;
+    --input: 222 45% 18%;
     --ring: 43 100% 50%;
   }
 }
