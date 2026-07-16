@@ -1,242 +1,137 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+// GameUI — HUD overlay (rankings, timer, minimap, notifications)
+import React, { memo } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { MiniMap } from './MiniMap';
+import type { LocalGameState } from '@/lib/gameStore';
+import { CHARACTERS } from '@/game/characters';
+import { VIEWPORT_W, VIEWPORT_H } from '@/game/constants';
 
-interface GameUIProps {
-  timerSeconds: number;
-  bombPickedUp: boolean;
-  isPaused: boolean;
-  isGameOver: boolean;
+interface Props {
+  state: LocalGameState;
   onPause: () => void;
-  onResume: () => void;
 }
 
-export default function GameUI({
-  timerSeconds, bombPickedUp, isPaused, isGameOver, onPause, onResume,
-}: GameUIProps) {
-  const urgent = bombPickedUp && timerSeconds <= 5;
-  const timerColor = urgent ? '#FF3333' : timerSeconds <= 10 ? '#FF9933' : '#FFFFFF';
-  const timerBg = urgent ? 'rgba(180,0,0,0.85)' : timerSeconds <= 10 ? 'rgba(150,80,0,0.8)' : 'rgba(0,0,0,0.55)';
+function GameUIInner({ state, onPause }: Props) {
+  const {
+    players, bombCountdown, notification, myDeviceId,
+    cameraX, cameraY, fps,
+  } = state;
+
+  const alive = players.filter(p => p.isAlive).sort((a, b) => b.score - a.score);
+  const deadCount = players.length - alive.length;
+  const bombHolder = players.find(p => p.hasBomb && p.isAlive);
+  const me = players.find(p => p.deviceId === myDeviceId);
+
+  // Timer color
+  const timerColor = bombCountdown > 10 ? '#fff' : bombCountdown > 5 ? '#FFB800' : '#EF4444';
+  const timerSecs = Math.ceil(Math.max(0, bombCountdown));
+  const timerDisplay = `${String(Math.floor(timerSecs / 60)).padStart(2, '0')}:${String(timerSecs % 60).padStart(2, '0')}`;
 
   return (
-    <>
-      {/* ── Top HUD ── */}
-      <View style={styles.hud} pointerEvents="box-none">
-        {/* Left: player badge */}
-        <View style={styles.playerBadge}>
-          <View style={styles.avatarDot} />
-          <Text style={styles.playerName}>P1</Text>
+    <View style={styles.root} pointerEvents="box-none">
+      {/* ── TOP ROW ── */}
+      <View style={styles.topRow} pointerEvents="box-none">
+        {/* Left: Rankings */}
+        <View style={styles.rankPanel}>
+          <Text style={styles.rankTitle}>👥 {alive.length} ALIVE</Text>
+          {alive.slice(0, 5).map((p, i) => {
+            const char = CHARACTERS[p.characterId];
+            return (
+              <View key={p.deviceId} style={[styles.rankRow, p.deviceId === myDeviceId && styles.rankRowMe]}>
+                <Text style={styles.rankNum}>{i + 1}</Text>
+                <View style={[styles.rankDot, { backgroundColor: char.bodyColor }]} />
+                <Text style={styles.rankName} numberOfLines={1}>{p.username}</Text>
+                {p.hasBomb && <Text style={styles.bombTag}>💣</Text>}
+              </View>
+            );
+          })}
+          {deadCount > 0 && (
+            <Text style={styles.deadCount}>💀 {deadCount} eliminated</Text>
+          )}
         </View>
 
-        {/* Center: bomb timer */}
+        {/* Centre: Timer */}
         <View style={styles.timerWrap}>
-          {bombPickedUp && (
-            <View style={[styles.timerPill, { backgroundColor: timerBg }]}>
-              <Text style={styles.timerBomb}>💣</Text>
-              <Text style={[styles.timerCount, { color: timerColor }]}>{timerSeconds}</Text>
-              <Text style={[styles.timerSec, { color: timerColor }]}>s</Text>
-              {urgent && <Text style={styles.urgentFlash}>!</Text>}
-            </View>
-          )}
-          {!bombPickedUp && (
-            <View style={styles.hintPill}>
-              <Text style={styles.hintText}>🔍  Find the bomb</Text>
-            </View>
+          <View style={[styles.timerBox, bombCountdown <= 5 && styles.timerBoxDanger]}>
+            <Text style={styles.timerIcon}>⏱</Text>
+            <Text style={[styles.timerText, { color: timerColor }]}>{timerDisplay}</Text>
+          </View>
+          {bombHolder && (
+            <Text style={styles.bombHolderLabel}>💣 {bombHolder.username}</Text>
           )}
         </View>
 
-        {/* Right: pause */}
-        <Pressable style={styles.pauseBtn} onPress={isPaused ? onResume : onPause}>
-          <Text style={styles.pauseIcon}>{isPaused ? '▶' : '⏸'}</Text>
-        </Pressable>
-      </View>
-
-      {/* ── Pause overlay ── */}
-      {isPaused && !isGameOver && (
-        <View style={styles.overlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>⏸  PAUSED</Text>
-            <Pressable style={styles.bigBtn} onPress={onResume}>
-              <Text style={styles.bigBtnText}>▶  RESUME</Text>
+        {/* Right: Minimap + ping + settings */}
+        <View style={styles.rightPanel}>
+          <View style={styles.topRightIcons}>
+            <Text style={styles.pingText}>📶 {me?.ping ?? 0}ms</Text>
+            <Pressable style={styles.settingsBtn} onPress={onPause}>
+              <Text style={styles.settingsIcon}>⚙️</Text>
             </Pressable>
           </View>
+          <MiniMap
+            players={players}
+            myDeviceId={myDeviceId}
+            cameraX={cameraX} cameraY={cameraY}
+            viewW={VIEWPORT_W} viewH={VIEWPORT_H}
+          />
+          <Text style={styles.fpsText}>{fps} FPS</Text>
+        </View>
+      </View>
+
+      {/* ── BOMB WARNING (me has bomb) ── */}
+      {me?.hasBomb && (
+        <View style={styles.bombWarning}>
+          <Text style={styles.bombWarningText}>💣 YOU HAVE THE BOMB!</Text>
+          <Text style={styles.bombWarningSub}>Touch another player to pass it!</Text>
         </View>
       )}
 
-      {/* ── Game Over overlay ── */}
-      {isGameOver && (
-        <View style={styles.overlay}>
-          <View style={[styles.modalCard, styles.gameOverCard]}>
-            <Text style={styles.bigEmoji}>💥</Text>
-            <Text style={styles.gameOverTitle}>YOU LOSE</Text>
-            <Text style={styles.gameOverSub}>The bomb exploded!</Text>
-            <View style={styles.separatorLine} />
-            <Text style={styles.retryHint}>Restart the app to play again</Text>
-          </View>
+      {/* ── CENTRE NOTIFICATION ── */}
+      {notification && (
+        <View style={styles.notification} pointerEvents="none">
+          <Text style={styles.notificationText}>{notification}</Text>
         </View>
       )}
-    </>
+    </View>
   );
 }
 
+export const GameUI = memo(GameUIInner);
+
 const styles = StyleSheet.create({
-  hud: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 6,
-  },
-  // Player badge
-  playerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.2)',
-    gap: 6,
-  },
-  avatarDot: {
-    width: 22, height: 22,
-    borderRadius: 11,
-    backgroundColor: '#FF6B6B',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  playerName: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 13,
-    letterSpacing: 1,
-  },
+  root: { ...StyleSheet.absoluteFillObject, zIndex: 5 },
+  // Top row
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 8, paddingTop: 6 },
+  // Rankings
+  rankPanel: { width: 130, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 10, padding: 7, gap: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  rankTitle: { color: '#FFB800', fontSize: 10, fontWeight: '900', marginBottom: 2 },
+  rankRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  rankRowMe: { backgroundColor: 'rgba(255,184,0,0.15)', borderRadius: 4, paddingHorizontal: 2 },
+  rankNum: { color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700', width: 12 },
+  rankDot: { width: 8, height: 8, borderRadius: 4 },
+  rankName: { flex: 1, color: '#fff', fontSize: 9, fontWeight: '700' },
+  bombTag: { fontSize: 10 },
+  deadCount: { color: 'rgba(255,255,255,0.4)', fontSize: 8, marginTop: 2 },
   // Timer
-  timerWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.25)',
-    gap: 4,
-  },
-  timerBomb: { fontSize: 22 },
-  timerCount: {
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: -1,
-    lineHeight: 36,
-  },
-  timerSec: {
-    fontSize: 16,
-    fontWeight: '700',
-    alignSelf: 'flex-end',
-    marginBottom: 2,
-  },
-  urgentFlash: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#FF3333',
-    marginLeft: 4,
-  },
-  hintPill: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-  },
-  hintText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  // Pause button
-  pauseBtn: {
-    width: 42, height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pauseIcon: { color: '#fff', fontSize: 16 },
-  // Overlays
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCard: {
-    backgroundColor: 'rgba(20,25,45,0.97)',
-    borderRadius: 28,
-    paddingVertical: 36,
-    paddingHorizontal: 52,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(100,140,255,0.3)',
-    shadowColor: '#4a90e2',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    gap: 16,
-  },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 30,
-    fontWeight: '900',
-    letterSpacing: 4,
-  },
-  bigBtn: {
-    backgroundColor: '#4a90e2',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderWidth: 2,
-    borderColor: '#7ab4f0',
-  },
-  bigBtnText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  gameOverCard: {
-    borderColor: 'rgba(255,50,50,0.5)',
-    shadowColor: '#FF3333',
-  },
-  bigEmoji: { fontSize: 72 },
-  gameOverTitle: {
-    color: '#FF3333',
-    fontSize: 48,
-    fontWeight: '900',
-    letterSpacing: 8,
-  },
-  gameOverSub: {
-    color: 'rgba(255,180,180,0.85)',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  separatorLine: {
-    width: 120,
-    height: 1.5,
-    backgroundColor: 'rgba(255,80,80,0.3)',
-    borderRadius: 1,
-  },
-  retryHint: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 13,
-  },
+  timerWrap: { alignItems: 'center', gap: 4 },
+  timerBox: { backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: 14, paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
+  timerBoxDanger: { borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.2)' },
+  timerIcon: { fontSize: 16 },
+  timerText: { fontSize: 28, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  bombHolderLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '700', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  // Right
+  rightPanel: { alignItems: 'flex-end', gap: 4 },
+  topRightIcons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pingText: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '700' },
+  settingsBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  settingsIcon: { fontSize: 14 },
+  fpsText: { color: 'rgba(255,255,255,0.35)', fontSize: 8 },
+  // Bomb warning
+  bombWarning: { position: 'absolute', top: 80, left: 0, right: 0, alignItems: 'center' },
+  bombWarningText: { color: '#FF3D00', fontSize: 18, fontWeight: '900', textShadowColor: '#000', textShadowRadius: 8 },
+  bombWarningSub: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '700' },
+  // Notification
+  notification: { position: 'absolute', bottom: 120, left: 0, right: 0, alignItems: 'center' },
+  notificationText: { color: '#FFB800', fontSize: 15, fontWeight: '900', backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,184,0,0.4)' },
 });

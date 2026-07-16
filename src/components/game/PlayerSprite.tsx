@@ -1,162 +1,152 @@
+// PlayerSprite — draws a cute chibi hero using pure View/Text primitives
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { CHARACTERS } from '@/game/characters';
+import type { CharacterId } from '@/types/types';
+import { PLAYER_SIZE, RUN_FRAMES, RUN_FRAME_DURATION, IDLE_FRAMES, IDLE_FRAME_DURATION } from '@/game/constants';
 
-import type { AnimationState, FacingDirection } from '../../game/types';
-
-interface PlayerSpriteProps {
-  size: number;
-  facing: FacingDirection;
-  animState: AnimationState;
+interface Props {
+  characterId: CharacterId;
+  animState: 'idle' | 'running' | 'carrying' | 'eliminated';
+  facing: 'left' | 'right';
   animClock: number;
-  hasBomb: boolean;
+  hasBomb?: boolean;
+  isMe?: boolean;
+  username?: string;
+  activePowerup?: string | null;
+  shieldActive?: boolean;
 }
 
-// Pure View/Text player — guaranteed to render inside Animated.View on all platforms
 export default function PlayerSprite({
-  size,
-  facing,
-  animState,
-  animClock,
-  hasBomb,
-}: PlayerSpriteProps) {
-  // 4-frame run cycle, 2-frame idle bob
-  const runFrame  = Math.floor(animClock / 110) % 4;
-  const idleFrame = Math.floor(animClock / 500) % 2;
+  characterId, animState, facing, animClock,
+  hasBomb, isMe, username, activePowerup, shieldActive,
+}: Props) {
+  const char = CHARACTERS[characterId] ?? CHARACTERS.playerone;
 
-  // Leg anim: alternate legs left/right for run
-  const leftLegUp  = animState === 'running' && runFrame % 2 === 0;
-  const rightLegUp = animState === 'running' && runFrame % 2 === 1;
-  // Body bob for idle
-  const bodyBob    = animState === 'idle' && idleFrame === 1 ? 1 : 0;
-  // Arm swing
-  const leftArmSwing  = animState === 'running' ? (runFrame % 2 === 0 ? -8 : 8) : 0;
-  const rightArmSwing = animState === 'running' ? (runFrame % 2 === 0 ? 8 : -8) : 0;
+  // Compute bounce offset for running animation
+  let bounceY = 0;
+  let legSwing = 0;
+  if (animState === 'running' || animState === 'carrying') {
+    const frame = Math.floor(animClock / RUN_FRAME_DURATION) % RUN_FRAMES;
+    bounceY = frame % 2 === 0 ? -3 : 1;
+    legSwing = frame % 2 === 0 ? 1 : -1;
+  } else if (animState === 'idle') {
+    const frame = Math.floor(animClock / IDLE_FRAME_DURATION) % IDLE_FRAMES;
+    bounceY = frame === 0 ? 0 : -1;
+  }
 
-  const s = size / 48; // scale factor
+  const isElim = animState === 'eliminated';
+  const flip = facing === 'left' ? -1 : 1;
 
   return (
-    <View style={[styles.root, { width: size, height: size * 1.5 }]}>
-      {/* Bomb carried above head */}
-      {hasBomb && (
-        <View style={[styles.carryBomb, { bottom: size * 1.2 + 2 }]}>
-          <Text style={{ fontSize: 16 * s }}>💣</Text>
+    <View style={[styles.root, { opacity: isElim ? 0.35 : 1 }]}>
+      {/* Shield ring */}
+      {shieldActive && (
+        <View style={[styles.shieldRing, { borderColor: '#00BFFF' }]} />
+      )}
+
+      {/* Username label */}
+      {username && (
+        <View style={[styles.nameBar, isMe && styles.nameBarMe]}>
+          <Text style={[styles.nameText, isMe && styles.nameTextMe]} numberOfLines={1}>
+            {isMe ? '▶ ' : ''}{username}
+          </Text>
         </View>
       )}
 
-      {/* Shadow */}
-      <View style={[styles.shadow, {
-        width: size * 0.75,
-        height: size * 0.18,
-        borderRadius: size * 0.1,
-        bottom: 0,
-        left: size * 0.125,
-      }]} />
+      {/* Powerup indicator */}
+      {activePowerup && (
+        <Text style={styles.powerupIcon}>{POWERUP_ICONS[activePowerup] ?? '✨'}</Text>
+      )}
 
-      {/* Left arm */}
-      <View style={[styles.arm, {
-        width: 7 * s, height: 18 * s, borderRadius: 4 * s,
-        left: -4 * s, top: 28 * s + bodyBob,
-        transform: [{ rotate: `${leftArmSwing}deg` }],
-        backgroundColor: '#4a90e2',
-      }]} />
+      {/* Body container with bounce */}
+      <View style={[styles.body, { transform: [{ translateY: bounceY }, { scaleX: flip }] }]}>
 
-      {/* Right arm */}
-      <View style={[styles.arm, {
-        width: 7 * s, height: 18 * s, borderRadius: 4 * s,
-        right: -4 * s, top: 28 * s + bodyBob,
-        transform: [{ rotate: `${rightArmSwing}deg` }],
-        backgroundColor: '#4a90e2',
-      }]} />
-
-      {/* Body */}
-      <View style={[styles.body, {
-        width: 28 * s, height: 18 * s,
-        borderRadius: 6 * s,
-        left: 10 * s, top: 28 * s + bodyBob,
-      }]}>
-        {/* Belt */}
-        <View style={[styles.belt, { height: 4 * s, bottom: 0, borderRadius: 2 * s }]}>
-          <View style={[styles.buckle, { width: 6 * s, height: 4 * s, borderRadius: 1 * s }]} />
-        </View>
-        {/* Body shine */}
-        <View style={[styles.bodyShine, { width: 10 * s, height: 5 * s, borderRadius: 3 * s, top: 2 * s, left: 3 * s }]} />
-      </View>
-
-      {/* Head */}
-      <View style={[styles.head, {
-        width: 30 * s, height: 30 * s,
-        borderRadius: 15 * s,
-        left: 9 * s, top: 0,
-      }]}>
-        {/* Hair (yellow top) */}
-        <View style={[styles.hair, { width: 30 * s, height: 16 * s, borderRadius: 15 * s, top: -2 * s }]} />
-        {/* Cheeks */}
-        <View style={[styles.cheekL, { width: 8 * s, height: 5 * s, borderRadius: 4 * s, bottom: 8 * s, left: 1 * s }]} />
-        <View style={[styles.cheekR, { width: 8 * s, height: 5 * s, borderRadius: 4 * s, bottom: 8 * s, right: 1 * s }]} />
-        {/* Eyes — flip based on facing */}
-        <View style={[styles.eyeRow, { top: 12 * s, flexDirection: facing === 'left' ? 'row-reverse' : 'row' }]}>
-          <View style={[styles.eyeWhite, { width: 9 * s, height: 10 * s, borderRadius: 5 * s }]}>
-            <View style={[styles.pupil, { width: 5 * s, height: 6 * s, borderRadius: 3 * s }]}>
-              <View style={[styles.shine, { width: 2 * s, height: 2 * s, borderRadius: s }]} />
+        {/* Bomb on back if carrying */}
+        {hasBomb && (
+          <View style={styles.bombCarry}>
+            <Text style={styles.bombEmoji}>💣</Text>
+            <View style={styles.fuse}>
+              <Text style={styles.fuseText}>✨</Text>
             </View>
           </View>
-          <View style={{ width: 4 * s }} />
-          <View style={[styles.eyeWhite, { width: 9 * s, height: 10 * s, borderRadius: 5 * s }]}>
-            <View style={[styles.pupil, { width: 5 * s, height: 6 * s, borderRadius: 3 * s }]}>
-              <View style={[styles.shine, { width: 2 * s, height: 2 * s, borderRadius: s }]} />
-            </View>
+        )}
+
+        {/* Head */}
+        <View style={[styles.head, { backgroundColor: char.skinColor }]}>
+          {/* Hair */}
+          <View style={[styles.hair, { backgroundColor: char.hairColor }]} />
+          {/* Face */}
+          <View style={styles.faceRow}>
+            <View style={styles.eye} />
+            {!isElim && <View style={styles.eye} />}
+            {isElim && <Text style={styles.xEye}>✕</Text>}
+          </View>
+          {!isElim && <View style={styles.mouth} />}
+          {isElim && <View style={[styles.mouth, styles.mouthSad]} />}
+        </View>
+
+        {/* Torso */}
+        <View style={[styles.torso, { backgroundColor: char.bodyColor }]}>
+          {/* Arms */}
+          <View style={[styles.arm, styles.armLeft, { backgroundColor: char.bodyDark, transform: [{ rotate: `${legSwing * 15}deg` }] }]} />
+          <View style={[styles.arm, styles.armRight, { backgroundColor: char.bodyDark, transform: [{ rotate: `${-legSwing * 15}deg` }] }]} />
+        </View>
+
+        {/* Legs */}
+        <View style={styles.legs}>
+          <View style={[styles.leg, { backgroundColor: char.bodyDark, transform: [{ rotate: `${legSwing * 20}deg` }] }]}>
+            <View style={[styles.shoe, { backgroundColor: char.shoeColor }]} />
+          </View>
+          <View style={[styles.leg, { backgroundColor: char.bodyDark, transform: [{ rotate: `${-legSwing * 20}deg` }] }]}>
+            <View style={[styles.shoe, { backgroundColor: char.shoeColor }]} />
           </View>
         </View>
-        {/* Mouth */}
-        <View style={[styles.mouth, {
-          width: animState === 'running' ? 10 * s : 8 * s,
-          height: 3 * s, borderRadius: 2 * s,
-          bottom: 5 * s, left: 10 * s,
-        }]} />
       </View>
 
-      {/* Legs */}
-      <View style={[styles.legRow, { top: 46 * s + bodyBob, left: 12 * s, gap: 4 * s }]}>
-        <View style={[styles.leg, {
-          width: 9 * s, height: leftLegUp ? 7 * s : 10 * s,
-          borderRadius: 4 * s,
-          marginTop: leftLegUp ? 3 * s : 0,
-        }]}>
-          {/* Shoe */}
-          <View style={[styles.shoe, { width: 11 * s, height: 7 * s, borderRadius: 4 * s, left: -1 * s, bottom: -3 * s }]} />
-        </View>
-        <View style={[styles.leg, {
-          width: 9 * s, height: rightLegUp ? 7 * s : 10 * s,
-          borderRadius: 4 * s,
-          marginTop: rightLegUp ? 3 * s : 0,
-        }]}>
-          {/* Shoe */}
-          <View style={[styles.shoe, { width: 11 * s, height: 7 * s, borderRadius: 4 * s, left: -1 * s, bottom: -3 * s }]} />
-        </View>
-      </View>
+      {/* Me indicator */}
+      {isMe && <View style={styles.meArrow}><Text style={styles.meArrowText}>▼</Text></View>}
     </View>
   );
 }
 
+const POWERUP_ICONS: Record<string, string> = {
+  shield: '🛡', speed_boost: '⚡', freeze: '❄️', extra_time: '⏰', ghost_dash: '👻',
+};
+
+const SZ = PLAYER_SIZE;
+
 const styles = StyleSheet.create({
-  root: { position: 'relative', alignItems: 'center' },
-  shadow: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.2)' },
-  carryBomb: { position: 'absolute', alignSelf: 'center' },
-  arm: { position: 'absolute' },
-  body: { position: 'absolute', backgroundColor: '#4a90e2', overflow: 'hidden' },
-  bodyShine: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.25)' },
-  belt: { position: 'absolute', width: '100%', backgroundColor: '#2c5f9e', alignItems: 'center', justifyContent: 'center' },
-  buckle: { backgroundColor: '#f5c518' },
-  head: { position: 'absolute', backgroundColor: '#ffcba4', overflow: 'hidden' },
-  hair: { position: 'absolute', backgroundColor: '#f5c518' },
-  cheekL: { position: 'absolute', backgroundColor: 'rgba(255,120,100,0.4)' },
-  cheekR: { position: 'absolute', backgroundColor: 'rgba(255,120,100,0.4)' },
-  eyeRow: { position: 'absolute', flexDirection: 'row', paddingHorizontal: 2 },
-  eyeWhite: { backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  pupil: { backgroundColor: '#1a1a2e', alignItems: 'flex-end', justifyContent: 'flex-start', paddingTop: 1, paddingRight: 1 },
-  shine: { backgroundColor: 'white' },
-  mouth: { position: 'absolute', backgroundColor: '#cc5533' },
-  legRow: { position: 'absolute', flexDirection: 'row', alignItems: 'flex-start' },
-  leg: { backgroundColor: '#3d5a99' },
-  shoe: { position: 'absolute', backgroundColor: '#cc3333' },
+  root: { width: SZ, height: SZ + 18, alignItems: 'center', justifyContent: 'flex-end' },
+  shieldRing: { position: 'absolute', width: SZ + 12, height: SZ + 12, borderRadius: (SZ + 12) / 2, borderWidth: 3, top: 8, opacity: 0.8 },
+  nameBar: { position: 'absolute', top: 0, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1, maxWidth: 80 },
+  nameBarMe: { backgroundColor: 'rgba(255,184,0,0.85)' },
+  nameText: { color: '#fff', fontSize: 7, fontWeight: '700', textAlign: 'center' },
+  nameTextMe: { color: '#000' },
+  powerupIcon: { position: 'absolute', top: -4, right: -4, fontSize: 10 },
+  body: { alignItems: 'center', width: SZ },
+  bombCarry: { position: 'absolute', top: 12, right: -2, zIndex: 10 },
+  bombEmoji: { fontSize: 14 },
+  fuse: { position: 'absolute', top: -4, right: 2 },
+  fuseText: { fontSize: 8 },
+  // Head
+  head: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4, overflow: 'hidden', zIndex: 3, borderWidth: 1, borderColor: 'rgba(0,0,0,0.15)' },
+  hair: { position: 'absolute', top: 0, width: 22, height: 12, borderTopLeftRadius: 11, borderTopRightRadius: 11 },
+  faceRow: { flexDirection: 'row', gap: 5, marginBottom: 2 },
+  eye: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#1a1a1a' },
+  xEye: { fontSize: 8, color: '#EF4444', fontWeight: '900' },
+  mouth: { width: 8, height: 3, borderRadius: 2, backgroundColor: '#c0392b' },
+  mouthSad: { borderRadius: 0, transform: [{ scaleY: -1 }] },
+  // Torso
+  torso: { width: 18, height: 16, borderRadius: 4, marginTop: 1, zIndex: 2, borderWidth: 1, borderColor: 'rgba(0,0,0,0.15)' },
+  arm: { position: 'absolute', width: 6, height: 12, borderRadius: 3, top: 2 },
+  armLeft: { left: -5 },
+  armRight: { right: -5 },
+  // Legs
+  legs: { flexDirection: 'row', gap: 3, marginTop: 1 },
+  leg: { width: 7, height: 10, borderRadius: 3, alignItems: 'center', justifyContent: 'flex-end' },
+  shoe: { width: 9, height: 5, borderRadius: 3 },
+  // Me indicator
+  meArrow: { position: 'absolute', top: -14 },
+  meArrowText: { color: '#FFB800', fontSize: 10, fontWeight: '900' },
 });

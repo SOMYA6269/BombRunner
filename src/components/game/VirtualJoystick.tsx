@@ -3,17 +3,19 @@ import { Animated, PanResponder, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { JOYSTICK_BASE_RADIUS, JOYSTICK_DEADZONE, JOYSTICK_KNOB_RADIUS } from '../../game/constants';
-import type { JoystickRef } from './GameCanvas';
+
+export interface JoystickRef { x: number; y: number; }
 
 interface VirtualJoystickProps {
-  joystickRef: React.RefObject<JoystickRef>;
+  joystickRef?: React.RefObject<JoystickRef>;
+  onMove?: (x: number, y: number) => void;
 }
 
 const BASE = JOYSTICK_BASE_RADIUS;
 const KNOB = JOYSTICK_KNOB_RADIUS;
 const MAX_DIST = BASE - KNOB - 4;
 
-export default function VirtualJoystick({ joystickRef }: VirtualJoystickProps) {
+export default function VirtualJoystick({ joystickRef, onMove }: VirtualJoystickProps) {
   const knobAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
   const panResponder = useRef(
@@ -29,23 +31,22 @@ export default function VirtualJoystick({ joystickRef }: VirtualJoystickProps) {
         const nx = dx / len;
         const ny = dy / len;
         knobAnim.setValue({ x: nx * clampLen, y: ny * clampLen });
-        if (joystickRef.current) {
-          if (clampLen / MAX_DIST > JOYSTICK_DEADZONE) {
-            joystickRef.current.x = nx;
-            joystickRef.current.y = ny;
-          } else {
-            joystickRef.current.x = 0;
-            joystickRef.current.y = 0;
-          }
+        const active = clampLen / MAX_DIST > JOYSTICK_DEADZONE;
+        if (joystickRef?.current) {
+          joystickRef.current.x = active ? nx : 0;
+          joystickRef.current.y = active ? ny : 0;
         }
+        onMove?.(active ? nx : 0, active ? ny : 0);
       },
       onPanResponderEnd: () => {
         knobAnim.setValue({ x: 0, y: 0 });
-        if (joystickRef.current) { joystickRef.current.x = 0; joystickRef.current.y = 0; }
+        if (joystickRef?.current) { joystickRef.current.x = 0; joystickRef.current.y = 0; }
+        onMove?.(0, 0);
       },
       onPanResponderTerminate: () => {
         knobAnim.setValue({ x: 0, y: 0 });
-        if (joystickRef.current) { joystickRef.current.x = 0; joystickRef.current.y = 0; }
+        if (joystickRef?.current) { joystickRef.current.x = 0; joystickRef.current.y = 0; }
+        onMove?.(0, 0);
       },
     }),
   ).current;
@@ -54,7 +55,6 @@ export default function VirtualJoystick({ joystickRef }: VirtualJoystickProps) {
 
   return (
     <View style={[styles.base, { width: D, height: D, borderRadius: BASE }]} {...panResponder.panHandlers}>
-      {/* SVG decorative base ring */}
       <Svg width={D} height={D} viewBox={`0 0 ${D} ${D}`} style={StyleSheet.absoluteFill}>
         <Defs>
           <RadialGradient id="bg" cx="50%" cy="50%" r="50%">
@@ -63,23 +63,13 @@ export default function VirtualJoystick({ joystickRef }: VirtualJoystickProps) {
           </RadialGradient>
         </Defs>
         <Circle cx={BASE} cy={BASE} r={BASE - 1} fill="url(#bg)" stroke="rgba(255,255,255,0.35)" strokeWidth={2.5} />
-        {/* Direction indicators */}
-        <Circle cx={BASE} cy={10}           r={4} fill="rgba(255,255,255,0.35)" />
-        <Circle cx={BASE} cy={D - 10}       r={4} fill="rgba(255,255,255,0.35)" />
-        <Circle cx={10}          cy={BASE}  r={4} fill="rgba(255,255,255,0.35)" />
-        <Circle cx={D - 10}      cy={BASE}  r={4} fill="rgba(255,255,255,0.35)" />
-        {/* Inner ring */}
+        <Circle cx={BASE} cy={10}      r={4} fill="rgba(255,255,255,0.35)" />
+        <Circle cx={BASE} cy={D - 10}  r={4} fill="rgba(255,255,255,0.35)" />
+        <Circle cx={10}   cy={BASE}    r={4} fill="rgba(255,255,255,0.35)" />
+        <Circle cx={D-10} cy={BASE}    r={4} fill="rgba(255,255,255,0.35)" />
         <Circle cx={BASE} cy={BASE} r={BASE * 0.45} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={1.5} strokeDasharray="4 4" />
       </Svg>
-
-      {/* Animated knob */}
-      <Animated.View
-        style={[
-          styles.knob,
-          { width: KNOB * 2, height: KNOB * 2, borderRadius: KNOB },
-          { transform: [{ translateX: knobAnim.x }, { translateY: knobAnim.y }] },
-        ]}
-      >
+      <Animated.View style={[styles.knob, { width: KNOB * 2, height: KNOB * 2, borderRadius: KNOB, transform: [{ translateX: knobAnim.x }, { translateY: knobAnim.y }] }]}>
         <Svg width={KNOB * 2} height={KNOB * 2} viewBox={`0 0 ${KNOB * 2} ${KNOB * 2}`} style={StyleSheet.absoluteFill}>
           <Defs>
             <RadialGradient id="knob" cx="40%" cy="35%" r="60%">
@@ -97,12 +87,6 @@ export default function VirtualJoystick({ joystickRef }: VirtualJoystickProps) {
 }
 
 const styles = StyleSheet.create({
-  base: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  knob: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  base: { alignItems: 'center', justifyContent: 'center' },
+  knob: { alignItems: 'center', justifyContent: 'center' },
 });

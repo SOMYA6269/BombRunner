@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "React Native 2D Party Game",
-    "slug": "party-blast",
-    "version": "1.0.5",
+    "name": "Bomb Runner",
+    "slug": "bomb-runner",
+    "version": "1.0.6",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

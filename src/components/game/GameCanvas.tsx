@@ -1,247 +1,93 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View, Text } from 'react-native';
-
-import {
-  BOMB_COUNTDOWN, BOMB_SPAWN, PLAYER_SIZE, PLAYER_SPAWN,
-  VIEWPORT_W, VIEWPORT_H, MAP_WIDTH, MAP_HEIGHT,
-} from '../../game/constants';
-import { gameTick } from '../../game/gameLogic';
-import type { GameState } from '../../game/types';
-import { MAP_TILES, MAP_DECORATIONS } from '../../game/mapData';
+// GameCanvas — renders the entire game world
+import React, { memo } from 'react';
+import { View, StyleSheet, Text } from 'react-native';
+import { MapTileRenderer } from './MapTileRenderer';
 import PlayerSprite from './PlayerSprite';
-import {
-  GrassFloor, AllTiles, AllDecorations,
-} from './MapTileRenderer';
+import { VIEWPORT_W, VIEWPORT_H, PLAYER_SIZE, PLAYER_HALF } from '@/game/constants';
+import type { LocalGameState } from '@/lib/gameStore';
 
-export interface JoystickRef { x: number; y: number }
-
-interface GameCanvasProps {
-  joystickRef: React.RefObject<JoystickRef>;
-  isPausedRef: React.RefObject<boolean>;
-  onTimerUpdate: (seconds: number) => void;
-  onBombPickup: () => void;
-  onGameOver: () => void;
-  onAnimStateUpdate: (state: string, facing: string, clock: number, hasBomb: boolean) => void;
+interface Props {
+  state: LocalGameState;
 }
 
-const INITIAL_STATE: GameState = {
-  player: {
-    x: PLAYER_SPAWN.x, y: PLAYER_SPAWN.y,
-    vx: 0, vy: 0, facing: 'right',
-    animState: 'idle', animClock: 0, hasBomb: false,
-  },
-  camera: {
-    x: PLAYER_SPAWN.x - VIEWPORT_W / 2,
-    y: PLAYER_SPAWN.y - VIEWPORT_H / 2,
-    shakeIntensity: 0, shakeDuration: 0, shakeElapsed: 0,
-  },
-  bomb: {
-    x: BOMB_SPAWN.x, y: BOMB_SPAWN.y,
-    pickedUp: false, countdown: BOMB_COUNTDOWN,
-    exploded: false, explosionTime: 0,
-  },
-  isPaused: false, isGameOver: false,
-  fps: 60, fpsAccumulator: 0, fpsFrameCount: 0,
-};
-
-export default function GameCanvas({
-  joystickRef, isPausedRef,
-  onTimerUpdate, onBombPickup, onGameOver, onAnimStateUpdate,
-}: GameCanvasProps) {
-  const stateRef    = useRef<GameState>(INITIAL_STATE);
-  const lastTimeRef = useRef<number | null>(null);
-  const elapsedRef  = useRef(0);
-
-  // Animated values for camera (world translate)
-  const worldX = useRef(new Animated.Value(-(INITIAL_STATE.camera.x))).current;
-  const worldY = useRef(new Animated.Value(-(INITIAL_STATE.camera.y))).current;
-
-  // Player position
-  const playerLeft = useRef(new Animated.Value(PLAYER_SPAWN.x - PLAYER_SIZE / 2)).current;
-  const playerTop  = useRef(new Animated.Value(PLAYER_SPAWN.y - PLAYER_SIZE / 2)).current;
-
-  // Bomb
-  const bombLeft    = useRef(new Animated.Value(BOMB_SPAWN.x - 16)).current;
-  const bombTop     = useRef(new Animated.Value(BOMB_SPAWN.y - 16)).current;
-  const bombOpacity = useRef(new Animated.Value(1)).current;
-
-  // Explosion
-  const explodeLeft    = useRef(new Animated.Value(PLAYER_SPAWN.x - 80)).current;
-  const explodeTop     = useRef(new Animated.Value(PLAYER_SPAWN.y - 80)).current;
-  const explodeOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    let rafId: number;
-    let lastTimer = BOMB_COUNTDOWN;
-    let lastPick  = false;
-    let lastOver  = false;
-    let animFrame = 0;
-
-    const tick = (now: number) => {
-      const dtMs = lastTimeRef.current === null ? 16.67 : Math.min(now - lastTimeRef.current, 50);
-      lastTimeRef.current = now;
-      elapsedRef.current += dtMs / 1000;
-
-      const next = gameTick(
-        { ...stateRef.current, isPaused: isPausedRef.current ?? false },
-        joystickRef.current?.x ?? 0,
-        joystickRef.current?.y ?? 0,
-        VIEWPORT_W, VIEWPORT_H, dtMs,
-      );
-      stateRef.current = next;
-
-      const t = elapsedRef.current;
-      const cam = next.camera;
-      const sx = cam.shakeIntensity > 0.5 ? Math.sin(t * 47.3) * cam.shakeIntensity : 0;
-      const sy = cam.shakeIntensity > 0.5 ? Math.sin(t * 63.7) * cam.shakeIntensity : 0;
-
-      worldX.setValue(-(cam.x + sx));
-      worldY.setValue(-(cam.y + sy));
-      playerLeft.setValue(next.player.x - PLAYER_SIZE / 2);
-      playerTop.setValue(next.player.y - PLAYER_SIZE / 2);
-      bombLeft.setValue(next.bomb.x - 16);
-      bombTop.setValue(next.bomb.y - 16);
-      bombOpacity.setValue(next.bomb.pickedUp || next.bomb.exploded ? 0 : 1);
-      explodeLeft.setValue(next.player.x - 80);
-      explodeTop.setValue(next.player.y - 80);
-      explodeOpacity.setValue(next.bomb.exploded ? 1 : 0);
-
-      // Push anim state to React every ~4 frames (60fps / 4 = 15fps for react re-renders)
-      animFrame++;
-      if (animFrame % 4 === 0) {
-        onAnimStateUpdate(next.player.animState, next.player.facing, next.player.animClock, next.player.hasBomb);
-      }
-
-      const timer = Math.ceil(next.bomb.countdown);
-      if (timer !== lastTimer) { lastTimer = timer; onTimerUpdate(timer); }
-      if (next.bomb.pickedUp && !lastPick) { lastPick = true; onBombPickup(); }
-      if (next.isGameOver    && !lastOver) { lastOver = true; onGameOver(); }
-
-      rafId = requestAnimationFrame(tick);
-    };
-
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+function GameCanvasInner({ state }: Props) {
+  const { players, cameraX, cameraY, myDeviceId, bombCountdown, gamePhase, explosionAt, powerups } = state;
 
   return (
     <View style={styles.viewport}>
-      <Animated.View style={[styles.world, { transform: [{ translateX: worldX }, { translateY: worldY }] }]}>
+      {/* Map tiles */}
+      <MapTileRenderer cameraX={cameraX} cameraY={cameraY} />
 
-        {/* Floor grass */}
-        <GrassFloor mapW={MAP_WIDTH} mapH={MAP_HEIGHT} border={64} />
-
-        {/* Border wall visual */}
-        <View style={styles.borderWall} />
-
-        {/* Decorations (behind tiles) */}
-        <AllDecorations decorations={MAP_DECORATIONS} />
-
-        {/* Collision tiles */}
-        <AllTiles tiles={MAP_TILES} />
-
-        {/* Bomb pickup — pure View/Text, safe inside Animated.View */}
-        <Animated.View style={[styles.bombWrap, { left: bombLeft, top: bombTop, opacity: bombOpacity }]}>
-          <View style={styles.bombBody}>
-            <Text style={styles.bombEmoji}>💣</Text>
+      {/* Powerup pickups */}
+      {powerups.map(pu => {
+        if (pu.collected) return null;
+        const sx = pu.posX - cameraX - 16;
+        const sy = pu.posY - cameraY - 16;
+        return (
+          <View key={pu.id} style={[styles.powerup, { left: sx, top: sy }]}>
+            <Text style={styles.powerupEmoji}>{POWERUP_EMOJI[pu.type] ?? '⭐'}</Text>
+            <View style={styles.powerupGlow} />
           </View>
-        </Animated.View>
+        );
+      })}
 
-        {/* Explosion ring */}
-        <Animated.View style={[styles.explosion, { left: explodeLeft, top: explodeTop, opacity: explodeOpacity }]} />
+      {/* Players */}
+      {players.map(p => {
+        const sx = p.posX - cameraX - PLAYER_HALF;
+        const sy = p.posY - cameraY - PLAYER_HALF - 18;
+        return (
+          <View key={p.deviceId} style={[styles.playerWrap, { left: sx, top: sy }]}>
+            <PlayerSprite
+              characterId={p.characterId}
+              animState={p.animState}
+              facing={p.facing}
+              animClock={p.animClock}
+              hasBomb={p.hasBomb}
+              isMe={p.deviceId === myDeviceId}
+              username={p.username}
+              activePowerup={p.activePowerup}
+              shieldActive={p.shieldActive}
+            />
+          </View>
+        );
+      })}
 
-        {/* Player — React re-renders at ~15fps for sprite, position is animated */}
-        <PlayerContainer playerLeft={playerLeft} playerTop={playerTop} stateRef={stateRef} />
-      </Animated.View>
+      {/* Explosion effect */}
+      {gamePhase === 'explosion' && explosionAt && (
+        <View style={[styles.explosion, {
+          left: explosionAt.posX - cameraX - 70,
+          top: explosionAt.posY - cameraY - 70,
+        }]}>
+          <Text style={styles.explosionEmoji}>💥</Text>
+          <View style={styles.explosionRing} />
+        </View>
+      )}
+
+      {/* Countdown overlay */}
+      {gamePhase === 'countdown' && (
+        <View style={styles.countdownOverlay}>
+          <Text style={styles.countdownNum}>{state.countdownValue}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
-// Separate component so player sprite re-renders don't affect the world view
-const PlayerContainer = React.memo(function PlayerContainer({
-  playerLeft, playerTop, stateRef,
-}: {
-  playerLeft: Animated.Value;
-  playerTop: Animated.Value;
-  stateRef: React.RefObject<GameState>;
-}) {
-  const [anim, setAnim] = React.useState({
-    animState: 'idle' as 'idle' | 'running',
-    facing: 'right' as 'left' | 'right',
-    animClock: 0,
-    hasBomb: false,
-  });
+export const GameCanvas = memo(GameCanvasInner);
 
-  // Update anim state from parent via interval
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const p = stateRef.current?.player;
-      if (p) {
-        setAnim({
-          animState: p.animState,
-          facing: p.facing,
-          animClock: p.animClock,
-          hasBomb: p.hasBomb,
-        });
-      }
-    }, 66); // ~15fps
-    return () => clearInterval(interval);
-  }, [stateRef]);
-
-  return (
-    <Animated.View style={[styles.playerWrap, { left: playerLeft, top: playerTop }]}>
-      <PlayerSprite
-        size={PLAYER_SIZE}
-        facing={anim.facing}
-        animState={anim.animState}
-        animClock={anim.animClock}
-        hasBomb={anim.hasBomb}
-      />
-    </Animated.View>
-  );
-});
+const POWERUP_EMOJI: Record<string, string> = {
+  shield: '🛡', speed_boost: '⚡', freeze: '❄️', extra_time: '⏰', ghost_dash: '👻',
+};
 
 const styles = StyleSheet.create({
-  viewport: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#1b5e20',
-    overflow: 'hidden',
-  },
-  world: {
-    position: 'absolute',
-    width: MAP_WIDTH,
-    height: MAP_HEIGHT,
-  },
-  borderWall: {
-    position: 'absolute',
-    left: 0, top: 0,
-    width: MAP_WIDTH, height: MAP_HEIGHT,
-    borderWidth: 64,
-    borderColor: '#455a64',
-  },
-  playerWrap: {
-    position: 'absolute',
-    width: PLAYER_SIZE,
-    height: PLAYER_SIZE * 1.4,
-  },
-  bombWrap: {
-    position: 'absolute',
-    width: 40, height: 40,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  bombBody: {
-    width: 36, height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  bombEmoji: { fontSize: 26 },
-  explosion: {
-    position: 'absolute',
-    width: 160, height: 160,
-    borderRadius: 80,
-    backgroundColor: '#FF6B00',
-    opacity: 0,
-  },
+  viewport: { width: VIEWPORT_W, height: VIEWPORT_H, overflow: 'hidden', position: 'relative', backgroundColor: '#1B5E20' },
+  playerWrap: { position: 'absolute', zIndex: 10 },
+  powerup: { position: 'absolute', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', zIndex: 8 },
+  powerupEmoji: { fontSize: 20 },
+  powerupGlow: { position: 'absolute', width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,200,0.25)', borderWidth: 1.5, borderColor: 'rgba(255,255,100,0.5)' },
+  explosion: { position: 'absolute', width: 140, height: 140, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+  explosionEmoji: { fontSize: 80 },
+  explosionRing: { position: 'absolute', width: 140, height: 140, borderRadius: 70, borderWidth: 4, borderColor: '#FF6D00', backgroundColor: 'rgba(255,109,0,0.25)' },
+  countdownOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', zIndex: 30 },
+  countdownNum: { fontSize: 120, fontWeight: '900', color: '#FFB800' },
 });
